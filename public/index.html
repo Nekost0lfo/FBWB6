@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth System</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --primary-color: #4a6fa5;
+            --card-bg: #f8f9fa;
+            --border-color: #e0e0e0;
+            --success-color: #28a745;
+            --error-color: #dc3545;
+        }
+
+        .dark-mode {
+            --bg-color: #1a1a1a;
+            --text-color: #f0f0f0;
+            --primary-color: #6b8cae;
+            --card-bg: #2d2d2d;
+            --border-color: #444444;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .signature {
+            margin-top: 50px;
+            color: #666;
+            font-size: 0.9em;
+            text-align: center;
+            padding: 15px;
+        }
+        .form-container {
+            background-color: var(--card-bg);
+            padding: 60px;
+            border-radius: 16px;
+            margin-bottom: 50px;
+            max-width: 400px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .message {
+            padding: 10px;
+            margin-top: 15px;
+            border-radius: 4px;
+        }
+
+        .success {
+            background-color: rgba(40, 167, 69, 0.2);
+            color: var(--success-color);
+        }
+
+        .error {
+            background-color: rgba(220, 53, 69, 0.2);
+            color: var(--error-color);
+        }
+
+        .protected-data {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            max-width: 600px;
+        }
+
+        #dataDisplay {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Форма регистрации</h2>
+    <div class="form-container">
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="regUsername">Имя:</label>
+                <input type="text" id="regUsername" required>
+            </div>
+            <div class="form-group">
+                <label for="regEmail">Email:</label>
+                <input type="email" id="regEmail" required>
+            </div>
+            <div class="form-group">
+                <label for="regPassword">Пароль:</label>
+                <input type="password" id="regPassword" required>
+            </div>
+            <button type="submit">Регистрация</button>
+        </form>
+        <div id="registerMessage" class="message hidden"></div>
+    </div>
+
+    <h2>Форма авторизации</h2>
+    <div class="form-container">
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="loginUsername">Имя пользователя:</label>
+                <input type="text" id="loginUsername" required>
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">Пароль:</label>
+                <input type="password" id="loginPassword" required>
+            </div>
+            <button type="submit">Войти</button>
+        </form>
+        <div id="loginMessage" class="message hidden"></div>
+    </div>
+
+    <div id="protectedSection" class="protected-data hidden">
+        <h2>Защищённые ресурсы</h2>
+        <p>Эти данные видны только авторизованным пользователям.</p>
+        
+        <button id="profileBtn">Мой профиль</button>
+        <button id="getDataBtn">Получить данные</button>
+        <button id="logoutBtn">Выйти</button>
+        <button id="themeToggle">Сменить тему</button>
+        
+        <div id="protectedContent"></div>
+        <div id="dataDisplay" class="hidden"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin; // Используем текущий origin
+        
+        // DOM elements
+        const registerForm = document.getElementById('registerForm');
+        const loginForm = document.getElementById('loginForm');
+        const protectedSection = document.getElementById('protectedSection');
+        const profileBtn = document.getElementById('profileBtn');
+        const getDataBtn = document.getElementById('getDataBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const themeToggle = document.getElementById('themeToggle');
+        const protectedContent = document.getElementById('protectedContent');
+        const dataDisplay = document.getElementById('dataDisplay');
+        
+        // Check authentication on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
+            loadTheme();
+        });
+        
+        // Check if user is authenticated
+        async function checkAuth() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/profile`, {
+      credentials: 'include',
+      headers: {
+        'Cache-Control': 'no-cache' // Отключаем кэширование
+      }
+    });
+    
+    console.log('Auth check response:', response.status);
+    
+    if (response.ok) {
+      protectedSection.classList.remove('hidden');
+      return true;
+    } else {
+      protectedSection.classList.add('hidden');
+      return false;
+    }
+  } catch (error) {
+    console.error('Auth check failed:', error);
+    protectedSection.classList.add('hidden');
+    return false;
+  }
+}
+        
+        // Register form submission
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, email, password }),
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                showMessage('registerMessage', data.message, response.ok ? 'success' : 'error');
+                
+                if (response.ok) {
+                    registerForm.reset();
+                }
+            } catch (error) {
+                showMessage('registerMessage', 'Ошибка регистрации', 'error');
+                console.error('Registration error:', error);
+            }
+        });
+        
+        // Login form submission
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                showMessage('loginMessage', data.message || (response.ok ? 'Вход выполнен' : 'Ошибка входа'), 
+                            response.ok ? 'success' : 'error');
+                
+                if (response.ok) {
+                    loginForm.reset();
+                    protectedSection.classList.remove('hidden');
+                }
+            } catch (error) {
+                showMessage('loginMessage', 'Ошибка входа', 'error');
+                console.error('Login error:', error);
+            }
+        });
+        
+        // Profile button click
+        profileBtn.addEventListener('click', async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/profile`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      showMessage('protectedContent', error.message, 'error');
+      return;
+    }
+    
+    const data = await response.json();
+    protectedContent.innerHTML = `
+      <h3>Профиль пользователя</h3>
+      <p><strong>Имя:</strong> ${data.user.username}</p>
+      <p><strong>Email:</strong> ${data.user.email}</p>
+    `;
+    dataDisplay.classList.add('hidden');
+    
+  } catch (error) {
+    showMessage('protectedContent', 'Ошибка загрузки профиля', 'error');
+    console.error('Profile error:', error);
+  }
+});
+
+        
+        // Get data button click
+        getDataBtn.addEventListener('click', async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/data`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      showMessage('dataDisplay', error.message, 'error');
+      return;
+    }
+    
+    const data = await response.json();
+    dataDisplay.innerHTML = `
+      <h3>Данные</h3>
+      <p><strong>Статус:</strong> ${data.cached ? 'Из кэша' : 'Новые данные'}</p>
+      <pre>${JSON.stringify(data.data, null, 2)}</pre>
+    `;
+    dataDisplay.classList.remove('hidden');
+    
+  } catch (error) {
+    showMessage('dataDisplay', 'Ошибка загрузки данных', 'error');
+    console.error('Data fetch error:', error);
+  }
+});
+        
+        // Logout button click
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    protectedSection.classList.add('hidden');
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        });
+        
+        // Theme toggle
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDarkMode = document.body.classList.contains('dark-mode');
+            localStorage.setItem('darkMode', isDarkMode);
+            themeToggle.textContent = isDarkMode ? 'Светлая тема' : 'Тёмная тема';
+        });
+        
+        // Load saved theme
+        function loadTheme() {
+            const darkMode = localStorage.getItem('darkMode') === 'true';
+            if (darkMode) {
+                document.body.classList.add('dark-mode');
+                themeToggle.textContent = 'Светлая тема';
+            } else {
+                themeToggle.textContent = 'Тёмная тема';
+            }
+        }
+        
+        // Show message
+        function showMessage(containerId, message, type) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = `
+    <div class="message ${type}">
+      ${message}
+    </div>
+  `;
+  container.classList.remove('hidden');
+  
+  setTimeout(() => {
+    container.classList.add('hidden');
+  }, 5000);
+}
+    </script>
+</body>
+<div class="signature">Batov Daniil EFBO-10-23</div>
+</html>
